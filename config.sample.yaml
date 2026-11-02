@@ -1,0 +1,7 @@
+# Settings for the synthetic demo data:  rishikesh-urban run --config data/sample/config.sample.yaml
+gpkg: data/sample/demo_city.gpkg
+out_dir: output/demo
+heat_column: heat_c      # demo grid already carries a (made-up) temperature, so no satellite download is needed
+use_osm: false           # fully offline
+use_ndvi: false
+language: English
