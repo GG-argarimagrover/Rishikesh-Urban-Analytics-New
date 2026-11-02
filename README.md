@@ -10,15 +10,54 @@ all in an interactive, scroll-through dashboard (English or Hinglish).
 * ⚠️ **Priority zones** – cells that are *both* hot *and* poorly served, with the people living there
 * 📦 Outputs: dashboard (`.html`), 4 interactive Folium maps, results GeoPackage/CSV, overview PNG, `summary.json`
 
-Three ways to use it: **web app** (upload a file in the browser), **command line**, or **Python / Colab**.
+Four ways to use it: **local web app** (upload a file in the browser), **Streamlit Cloud**, **command line**, or **Python / Colab**.
+
+---
+
+## Repository layout
+
+The package must live inside `src/rishikesh_urban/`. If the `.py` files sit loose in the repo root, installs and imports
+fail with `ModuleNotFoundError: rishikesh_urban`.
+
+```
+.
+├── src/
+│   └── rishikesh_urban/
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── amenities.py
+│       ├── app.py            # Flask web app
+│       ├── cli.py
+│       ├── config.py
+│       ├── context.py
+│       ├── dashboard.py
+│       ├── heat.py
+│       ├── indices.py
+│       ├── io.py
+│       ├── maps.py
+│       ├── osm.py
+│       ├── pipeline.py
+│       ├── places.py
+│       ├── units.py
+│       └── templates/
+│           └── dashboard.html
+├── data/sample/              # demo_city.gpkg (synthetic) + config.sample.yaml
+├── tests/                    # conftest.py + pytest suite
+├── notebooks/                # Colab quick-start + original notebook
+├── streamlit_app.py          # Streamlit Cloud entry point
+├── requirements.txt
+├── pyproject.toml
+├── Dockerfile · docker-compose.yml · Procfile · render.yaml · Makefile
+└── LICENSE · README.md · .gitignore · .dockerignore
+```
 
 ---
 
 ## 1 · Quick start (2 minutes, no data needed)
 
 ```bash
-git clone https://github.com/YOUR_USER/rishikesh-urban-intelligence.git
-cd rishikesh-urban-intelligence
+git clone https://github.com/GG-argarimagrover/Rishikesh-Urban-Analytics-New.git
+cd Rishikesh-Urban-Analytics-New
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
@@ -29,7 +68,7 @@ rishikesh-urban run --config data/sample/config.sample.yaml   # offline demo
 > ⚠️ `data/sample/demo_city.gpkg` is **synthetic** (made-up wards, population, temperatures and amenities). It only shows the
 > expected layer structure. Do not draw conclusions from it.
 
-### Web app
+### Web app (local)
 
 ```bash
 rishikesh-urban serve            # http://127.0.0.1:8000
@@ -63,17 +102,66 @@ See [`notebooks/colab_quickstart.ipynb`](notebooks/colab_quickstart.ipynb). Your
 
 ## 2 · Deploy it
 
-The app is a standard Flask app served by gunicorn. **One worker, several threads** (job state is kept on disk and
+The Flask app is served by gunicorn. **One worker, several threads** (job state is kept on disk and
 analyses run in a background thread pool).
 
 | Where | How |
 |---|---|
+| **Streamlit Cloud** | See [Deploy on Streamlit](#deploy-on-streamlit) below. Light use only (~1 GB RAM). |
 | **Docker (anywhere)** | `docker build -t rishikesh-urban . && docker run -p 8000:8000 -v rui-data:/data rishikesh-urban` or `docker compose up --build` |
 | **Render** | *New ▸ Blueprint* → pick the repo (`render.yaml` is included). Use ≥ 2 GB RAM for real Landsat runs. |
 | **Railway / Heroku / Koyeb** | Uses the `Procfile`. Set `RUI_DATA_DIR` to a persistent volume if you want results to survive restarts. |
 | **VPS (Ubuntu)** | `pip install .` then `gunicorn "rishikesh_urban.app:get_app()" --bind 0.0.0.0:8000 --workers 1 --threads 8 --timeout 300` behind nginx/Caddy. |
 
-### Environment variables
+### Deploy on Streamlit
+
+Streamlit cannot run the Flask app directly, so the repo includes a small wrapper, `streamlit_app.py`.
+
+1. Make sure the package is in `src/rishikesh_urban/` (see [Repository layout](#repository-layout)).
+2. `requirements.txt` must include:
+   ```
+   streamlit
+   -e .
+   ```
+3. Go to [share.streamlit.io](https://share.streamlit.io) → **Create app** → **Deploy a public app from GitHub**.
+4. Repository `GG-argarimagrover/Rishikesh-Urban-Analytics-New`, branch `main`, main file `streamlit_app.py` → **Deploy**.
+5. After pushing fixes: **Manage app ▸ ⋮ ▸ Reboot app**.
+
+`streamlit_app.py`:
+
+```python
+import tempfile
+from pathlib import Path
+import streamlit as st
+import streamlit.components.v1 as components
+from rishikesh_urban import Config, run_pipeline
+
+st.set_page_config(page_title="Rishikesh Urban Intelligence", layout="wide")
+st.title("🏔️ Rishikesh Urban Intelligence")
+
+up = st.file_uploader("Upload your GeoPackage", type=["gpkg"])
+lang = st.radio("Language", ["English", "Hinglish"], horizontal=True)
+heat_col = st.text_input("Heat column name (leave blank to use Landsat)")
+use_ndvi = st.checkbox("Compute greenery from Landsat (uses lots of memory)", False)
+
+if up and st.button("Run analysis"):
+    work = Path(tempfile.mkdtemp())
+    gp = work / "input.gpkg"
+    gp.write_bytes(up.getbuffer())
+    out = work / "out"
+    with st.spinner("Running analysis... this can take a few minutes"):
+        run_pipeline(Config(gpkg=str(gp), language=lang, out_dir=str(out),
+                            heat_column=heat_col, use_ndvi=use_ndvi))
+    html = (out / "Rishikesh_Dashboard.html").read_text(encoding="utf-8")
+    st.download_button("Download dashboard", html, "Rishikesh_Dashboard.html", "text/html")
+    components.html(html, height=900, scrolling=True)
+```
+
+**Streamlit limits:** about 1 GB RAM, so Landsat heat/greenery runs will likely crash. Put a temperature column in your
+GeoPackage, enter its name in the heat box, and leave greenery unticked. Upload limit is 200 MB by default. The app is public
+by default, so anyone with the link can run it.
+
+### Environment variables (Flask app)
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -84,7 +172,7 @@ analyses run in a background thread pool).
 | `RUI_MAX_CONCURRENT_JOBS` | `1` | Analyses running at once (each can use ~1–2 GB RAM) |
 | `RUI_USER` / `RUI_PASSWORD` | unset | Set both to require HTTP basic auth |
 
-> 🔒 The app has **no login by default**. If you expose it publicly, set `RUI_USER`/`RUI_PASSWORD` (and use HTTPS), because
+> 🔒 The Flask app has **no login by default**. If you expose it publicly, set `RUI_USER`/`RUI_PASSWORD` (and use HTTPS), because
 > anyone could otherwise trigger heavy computations.
 
 The generated dashboard is a single HTML file you can also host on GitHub Pages / any static host. It loads Leaflet and
@@ -107,6 +195,9 @@ Everything is optional; the more you give, the better the result. Layers are aut
 
 Any CRS works (reprojected to UTM 44N, `EPSG:32644`). Override auto-detection with `aoi_layer`, `units_layer`,
 `amenity_layer`, `amenity_type_column`, `pop_column`, `heat_column`.
+
+The file must be a `.gpkg`. Shapefiles, GeoJSON or zips should be converted first (QGIS: right-click layer ▸ Export ▸ Save
+Features As ▸ GeoPackage).
 
 **Real indicators instead of proxies:** if your units layer has literacy / health / income / traffic columns, pass their names
 (`literacy_column`, `health_column`, `income_column`, `traffic_column`). Otherwise the dashboard uses clearly labelled
@@ -155,7 +246,7 @@ Use CLI flags (`--walk-radius-m 800`), a YAML/JSON file (`--config`), a `Config(
 | 8–9 Hot / under-served / priority flags, tables | `indices.py` |
 | 10–11 Maps & overview | `maps.py` |
 | 13 Story dashboard | `dashboard.py` + `templates/dashboard.html` |
-| – Orchestration / CLI / web app | `pipeline.py`, `cli.py`, `app.py` |
+| – Orchestration / CLI / web app | `pipeline.py`, `cli.py`, `app.py`, `streamlit_app.py` |
 
 **Access score** = 50 % share of amenity types within `walk_radius_m` + 50 % smooth distance-decay closeness.
 **Priority cell** = hot **and** low-amenity (built-up only).
@@ -182,18 +273,14 @@ make demo            # offline demo run
 
 The tests run fully offline (Landsat/OSM are mocked where needed). CI runs them on Python 3.10–3.12 and builds the Docker image.
 
-```
-src/rishikesh_urban/   package (pipeline, dashboard, CLI, Flask app, sample-data generator)
-data/sample/           synthetic demo GeoPackage + example config
-tests/                 pytest suite
-notebooks/             Colab quick-start + your original notebook
-```
-
 ### Troubleshooting
 
+* **`ModuleNotFoundError: rishikesh_urban`** → the `.py` files must be in `src/rishikesh_urban/`, and `requirements.txt` must contain `-e .`. Reboot the app after fixing.
+* **Can't upload to GitHub** → the browser limit is 25 MB per file. Keep large GeoPackages on your computer and run the CLI locally.
+* **Upload fails in the web app** → file must be `.gpkg`; raise `RUI_MAX_UPLOAD_MB` for big files.
 * **"No scenes found"** → widen `years`/season or raise `max_cloud`.
 * **Overpass busy / OSM unavailable** → the run continues with your GeoPackage data (re-run later), or set `use_osm: false`.
-* **Out of memory** → smaller study area, fewer `years`, or more RAM; keep `RUI_MAX_CONCURRENT_JOBS=1`.
+* **Out of memory (Streamlit/Render free tier)** → provide a `heat_column`, use `--no-use-ndvi`, use a smaller study area, fewer `years`, or more RAM; keep `RUI_MAX_CONCURRENT_JOBS=1`.
 * **Blank map in the dashboard** → the viewer needs internet (CDN scripts + tiles).
 
 ## Data & credits
