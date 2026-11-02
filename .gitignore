@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+output/
+jobs/
+*.tmp
+.DS_Store
+# keep the synthetic demo data, ignore any real data you drop in
+data/*
+!data/sample/
+data/sample/*
+!data/sample/demo_city.gpkg
+!data/sample/config.sample.yaml

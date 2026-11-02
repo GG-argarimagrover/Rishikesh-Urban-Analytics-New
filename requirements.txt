@@ -1,0 +1,23 @@
+# Same list as pyproject.toml – use either `pip install -r requirements.txt` or `pip install .`
+numpy
+pandas
+geopandas>=0.14
+shapely>=2.0
+pyogrio
+scipy
+matplotlib
+folium
+branca
+osmnx>=1.9
+pystac-client
+planetary-computer
+odc-stac
+rioxarray
+rasterio
+affine
+xarray
+dask[array]
+mapclassify
+pyyaml
+flask>=3
+gunicorn

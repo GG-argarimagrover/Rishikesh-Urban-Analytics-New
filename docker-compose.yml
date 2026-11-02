@@ -1,0 +1,12 @@
+services:
+  rishikesh:
+    build: .
+    ports: ["8000:8000"]
+    volumes: ["rui-data:/data"]
+    environment:
+      RUI_MAX_UPLOAD_MB: "300"
+      RUI_JOB_TTL_HOURS: "24"
+      # RUI_USER: "admin"          # uncomment both to enable HTTP basic auth
+      # RUI_PASSWORD: "change-me"
+volumes:
+  rui-data:

@@ -1,0 +1,19 @@
+# Render.com blueprint – "New ▸ Blueprint" and point it at this repo.
+# Landsat processing needs RAM: use at least the Standard (2 GB) plan for real data; the demo works on smaller plans.
+services:
+  - type: web
+    name: rishikesh-urban-intelligence
+    runtime: docker
+    plan: standard
+    healthCheckPath: /healthz
+    disk:
+      name: rui-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: RUI_JOB_TTL_HOURS
+        value: "24"
+      - key: RUI_USER
+        sync: false
+      - key: RUI_PASSWORD
+        sync: false
